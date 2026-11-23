@@ -1,40 +1,83 @@
 <!doctype html>
-<html lang="en">
+<html lang="bn">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dhaka Grocery Price Compare</title>
+<title>Grocery Price Compare — Bangladesh</title>
 <style>
-body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fb;color:#172033}main{max-width:900px;margin:auto;padding:24px}h1{margin-bottom:6px}.sub{color:#657086}input{width:100%;box-sizing:border-box;padding:14px;border:1px solid #ccd3df;border-radius:12px;font-size:18px;margin:18px 0}.card{background:white;border:1px solid #e1e5ec;border-radius:14px;padding:16px;margin:10px 0}.best{border:2px solid #20a05a}.price{font-size:20px;font-weight:700}.meta{color:#687386;font-size:14px}
+:root{font-family:system-ui,"Noto Sans Bengali",sans-serif;color:#172033;background:#f5f7fb}
+*{box-sizing:border-box}body{margin:0}main{max-width:980px;margin:auto;padding:24px}
+h1{margin:0 0 6px}.sub,.muted{color:#657086}.status{padding:12px 14px;border-radius:12px;background:#fff4d6;color:#76520a;margin:16px 0}
+input{width:100%;padding:14px;border:1px solid #ccd3df;border-radius:12px;font-size:17px;margin:14px 0}
+.group{background:white;border:1px solid #e1e5ec;border-radius:14px;padding:16px;margin:14px 0}
+.store{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 0;border-top:1px solid #edf0f4}
+.store:first-of-type{border-top:0}.price{font-size:19px;font-weight:700}.best{color:#087a42;font-weight:700}
+.meta{font-size:13px;color:#687386}.empty{padding:18px;background:white;border-radius:12px;color:#657086}
+.tag{font-size:12px;padding:4px 8px;border-radius:99px;background:#e8f6ed;color:#087a42}
+@media(max-width:600px){main{padding:16px}.store{align-items:flex-start;flex-direction:column}}
 </style>
 </head>
-<body>
-<main>
+<body><main>
 <h1>Grocery Price Compare</h1>
-<p class="sub">Compare normalized grocery prices across Dhaka stores.</p><div class="meta">Data layer: demo records for now • Live store-price collection is the next stage.</div>
-<input id="search" placeholder="Search: ডিম, চাল, তেল..." aria-label="Search grocery item">
-<section id="results"></section>
+<p class="sub">বাংলাদেশের grocery shop-এর দাম পাশাপাশি তুলনা করুন</p>
+<div id="status" class="status">দামের তথ্য লোড হচ্ছে…</div>
+<input id="search" type="search" placeholder="পণ্য খুঁজুন: ডিম, সাদা ডিম, লাল ডিম, চাল, তেল…" aria-label="পণ্য খুঁজুন">
+<section id="results" aria-live="polite"></section>
+<p class="meta">শুধু source URL, প্যাক সাইজ ও পর্যবেক্ষণের সময়সহ যাচাইকৃত রেকর্ডকে বর্তমান দাম হিসেবে দেখানো হবে।</p>
 <script>
-const data=[
- {name:"Farm Eggs",aliases:["ডিম","egg","eggs"],store:"Agora",qty:12,unit:"pcs",price:180,date:"2026-11-24"},
- {name:"Farm Eggs",aliases:["ডিম","egg","eggs"],store:"Shwapno",qty:12,unit:"pcs",price:168,date:"2026-11-24"},
- {name:"Farm Eggs",aliases:["ডিম","egg","eggs"],store:"Meena Bazar",qty:12,unit:"pcs",price:174,date:"2026-11-24"},
- {name:"Chinigura Rice",aliases:["চাল","rice","chinigura"],store:"Agora",qty:1,unit:"kg",price:195,date:"2026-11-24"},
- {name:"Chinigura Rice",aliases:["চাল","rice","chinigura"],store:"Shwapno",qty:1,unit:"kg",price:210,date:"2026-11-24"}
-];
-function render(q=""){
- const x=q.trim().toLowerCase();
- const rows=data.filter(p=>!x||p.name.toLowerCase().includes(x)||p.aliases.some(a=>a.toLowerCase().includes(x)));
- const el=document.getElementById("results");
- if(!rows.length){el.innerHTML="<div class='card'>No matching products yet.</div>";return}
- const groups={}; rows.forEach(p=>(groups[p.name]??=[]).push(p));
- el.innerHTML=Object.entries(groups).map(([name,items])=>{
-   const min=Math.min(...items.map(p=>p.price/p.qty));
-   return "<h2>"+name+"</h2>"+items.map(p=>{const normalized=p.price/p.qty;return "<div class='card "+(normalized===min?"best":"")+"'><b>"+p.store+"</b><div class='price'>৳"+p.price+" / "+p.qty+" "+p.unit+"</div><div>Comparable: ৳"+normalized.toFixed(2)+" per "+p.unit.replace("pcs","pc")+"</div><div class='meta'>Last updated: "+p.date+"</div></div>"}).join("")
+const DATA_URL="./data/prices.json";
+const statusEl=document.getElementById("status");
+const resultsEl=document.getElementById("results");
+const searchEl=document.getElementById("search");
+let records=[];
+const escapeHtml=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm=s=>String(s??"").trim().toLocaleLowerCase();
+function unitPrice(p){return Number(p.price)/Number(p.quantity)}
+function unitLabel(p){return p.unit==="pcs"?"পিস":p.unit==="kg"?"কেজি":p.unit==="l"?"লিটার":p.unit}
+function render(){
+ const q=norm(searchEl.value);
+ const filtered=records.filter(p=>{
+  const hay=[p.product_name,p.variant,p.brand,...(p.aliases||[])].map(norm).join(" ");
+  return !q||hay.includes(q);
+ });
+ if(!filtered.length){
+  resultsEl.innerHTML='<div class="empty">'+(records.length?'কোনো matching product পাওয়া যায়নি।':'এখনো কোনো verified live price feed যুক্ত হয়নি।')+'</div>';
+  return;
+ }
+ const groups={};
+ filtered.forEach(p=>{const key=[p.product_name,p.variant||"",p.brand||"",p.quantity,p.unit].join("|");(groups[key]??=[]).push(p)});
+ resultsEl.innerHTML=Object.values(groups).map(items=>{
+  const prices=items.map(unitPrice).filter(Number.isFinite);
+  const min=Math.min(...prices);
+  const first=items[0];
+  const heading=[first.product_name,first.variant,first.brand].filter(Boolean).join(" — ");
+  return '<article class="group"><h2>'+escapeHtml(heading)+'</h2><div class="meta">প্যাক: '+escapeHtml(first.quantity)+' '+escapeHtml(unitLabel(first))+'</div>'+
+   items.sort((a,b)=>unitPrice(a)-unitPrice(b)).map(p=>{
+    const best=unitPrice(p)===min;
+    const observed=p.observed_at?new Date(p.observed_at).toLocaleString("bn-BD",{timeZone:"Asia/Dhaka"}):"সময় অজানা";
+    return '<div class="store"><div><strong>'+escapeHtml(p.store_name)+'</strong> '+(best?'<span class="tag">সর্বনিম্ন</span>':'')+
+     '<div class="meta">প্রতি '+escapeHtml(unitLabel(p))+' ৳'+unitPrice(p).toFixed(2)+' · দেখা হয়েছে: '+escapeHtml(observed)+'</div></div>'+
+     '<div class="price">৳'+escapeHtml(p.price)+' <span class="meta">/ '+escapeHtml(p.quantity)+' '+escapeHtml(unitLabel(p))+'</span></div>'+
+     '<div class="meta"><a href="'+escapeHtml(p.source_url)+'" target="_blank" rel="noopener">দামের উৎস</a></div></div>';
+   }).join("")+'</article>';
  }).join("");
 }
-document.getElementById("search").addEventListener("input",e=>render(e.target.value)); render("ডিম");
+async function loadPrices(){
+ try{
+  const response=await fetch(DATA_URL,{cache:"no-store"});
+  if(!response.ok)throw new Error("HTTP "+response.status);
+  const data=await response.json();
+  records=(data.records||[]).filter(p=>p.verification_status==="verified"&&p.source_url&&p.observed_at&&Number(p.price)>0&&Number(p.quantity)>0);
+  statusEl.textContent=records.length
+   ?'যাচাইকৃত রেকর্ড: '+records.length+'টি · সর্বশেষ সংগ্রহ: '+(data.last_checked_at?new Date(data.last_checked_at).toLocaleString("bn-BD",{timeZone:"Asia/Dhaka"}):"সময় দেওয়া নেই")
+   :'ডেটা ফিড সংযুক্ত, কিন্তু এখনো কোনো যাচাইকৃত live price record নেই। Demo price দেখানো হচ্ছে না।';
+  render();
+ }catch(error){
+  statusEl.textContent="দামের ডেটা লোড করা যায়নি। পরে আবার চেষ্টা করুন।";
+  resultsEl.innerHTML='<div class="empty">Price feed unavailable.</div>';
+ }
+}
+searchEl.addEventListener("input",render);
+loadPrices();
 </script>
-</main>
-</body>
-</html>
+</main></body></html>
