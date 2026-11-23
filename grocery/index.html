@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dhaka Grocery Price Compare</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fb;color:#172033}main{max-width:900px;margin:auto;padding:24px}h1{margin-bottom:6px}.sub{color:#657086}input{width:100%;box-sizing:border-box;padding:14px;border:1px solid #ccd3df;border-radius:12px;font-size:18px;margin:18px 0}.card{background:white;border:1px solid #e1e5ec;border-radius:14px;padding:16px;margin:10px 0}.best{border:2px solid #20a05a}.price{font-size:20px;font-weight:700}.meta{color:#687386;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>Grocery Price Compare</h1>
+<p class="sub">Compare normalized grocery prices across Dhaka stores.</p>
+<input id="search" placeholder="Search: ডিম, চাল, তেল..." aria-label="Search grocery item">
+<section id="results"></section>
+<script>
+const data=[
+ {name:"Farm Eggs",aliases:["ডিম","egg","eggs"],store:"Agora",qty:12,unit:"pcs",price:180,date:"2026-11-24"},
+ {name:"Farm Eggs",aliases:["ডিম","egg","eggs"],store:"Shwapno",qty:12,unit:"pcs",price:168,date:"2026-11-24"},
+ {name:"Farm Eggs",aliases:["ডিম","egg","eggs"],store:"Meena Bazar",qty:12,unit:"pcs",price:174,date:"2026-11-24"},
+ {name:"Chinigura Rice",aliases:["চাল","rice","chinigura"],store:"Agora",qty:1,unit:"kg",price:195,date:"2026-11-24"},
+ {name:"Chinigura Rice",aliases:["চাল","rice","chinigura"],store:"Shwapno",qty:1,unit:"kg",price:210,date:"2026-11-24"}
+];
+function render(q=""){
+ const x=q.trim().toLowerCase();
+ const rows=data.filter(p=>!x||p.name.toLowerCase().includes(x)||p.aliases.some(a=>a.toLowerCase().includes(x)));
+ const el=document.getElementById("results");
+ if(!rows.length){el.innerHTML="<div class='card'>No matching products yet.</div>";return}
+ const groups={}; rows.forEach(p=>(groups[p.name]??=[]).push(p));
+ el.innerHTML=Object.entries(groups).map(([name,items])=>{
+   const min=Math.min(...items.map(p=>p.price/p.qty));
+   return "<h2>"+name+"</h2>"+items.map(p=>{const normalized=p.price/p.qty;return "<div class='card "+(normalized===min?"best":"")+"'><b>"+p.store+"</b><div class='price'>৳"+p.price+" / "+p.qty+" "+p.unit+"</div><div>Comparable: ৳"+normalized.toFixed(2)+" per "+p.unit.replace("pcs","pc")+"</div><div class='meta'>Last updated: "+p.date+"</div></div>"}).join("")
+ }).join("");
+}
+document.getElementById("search").addEventListener("input",e=>render(e.target.value)); render("ডিম");
+</script>
+</main>
+</body>
+</html>
